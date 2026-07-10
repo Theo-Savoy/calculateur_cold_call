@@ -1,0 +1,6 @@
+.DS_Store
+.commandcode/
+scratch/
+screenshots/
+*.html.old
+Minari*.html

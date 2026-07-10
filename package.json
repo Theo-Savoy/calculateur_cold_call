@@ -1,0 +1,9 @@
+{
+  "name": "calculateur_cold_call",
+  "version": "1.0.0",
+  "description": "Leadjimé – Simulateur Objectif Cold Call",
+  "private": true,
+  "scripts": {
+    "test": "node scratch/test_export.js"
+  }
+}
