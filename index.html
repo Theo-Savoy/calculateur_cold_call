@@ -134,22 +134,6 @@
       box-shadow: 0 0 0 3px var(--accent-dim);
     }
 
-    .masthead-credit {
-      font-family: var(--font-data);
-      font-size: 11px;
-      font-weight: 400;
-      color: var(--muted);
-      letter-spacing: 0.03em;
-      margin-top: 18px;
-      margin-bottom: -12px;
-      opacity: 0.85;
-    }
-
-    .masthead-credit strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
     h1 {
       font-family: var(--font-display);
       font-weight: 700;
@@ -586,6 +570,23 @@
       text-align: right;
       text-shadow: none;
       min-width: 42px;
+    }
+
+    /* Credit (footer) */
+    .site-credit {
+      display: flex;
+      justify-content: flex-end;
+      padding: 24px 36px 8px;
+      margin-top: 32px;
+      position: relative;
+    }
+
+    .site-credit-hello {
+      font-family: var(--font-data);
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.28);
     }
 
     /* ---------- Savings callout ---------- */
@@ -2399,7 +2400,6 @@
           <span>N°01 · Simulateur</span>
         </div>
       </div>
-      <p class="masthead-credit">Outil créé par <strong>Théo Savoy</strong> pour Leadjimé.</p>
       <h1>Combien d'appels pour <em>votre prochain palier&nbsp;?</em></h1>
       <p class="lede">Renseignez votre objectif et votre funnel — on calcule le volume d'appels nécessaire et le temps
         que ça représente, avec ou sans Leadjimé.</p>
@@ -2647,11 +2647,15 @@
         <!-- 05 (Lecture) supprimée — l'info est maintenant dans 04 -->
 
 
-        <!-- Actions (deplacees dans la colonne de gauche) -->
+        </main>
+
+        <footer class="site-credit">
+          <span class="site-credit-hello">Hello Théo</span>
+        </footer>
 
         <!-- Modal d'export : card dediee 1200x630 (format LinkedIn/Twitter) -->
-        <div class="export-modal" id="export-modal" hidden>
-          <div class="export-modal-backdrop" id="export-modal-backdrop"></div>
+          <div class="export-modal" id="export-modal" hidden>
+            <div class="export-modal-backdrop" id="export-modal-backdrop"></div>
           <div class="export-modal-card">
             <div class="export-modal-head">
               <span class="export-modal-eyebrow">Aperçu de l'export</span>
@@ -3022,7 +3026,7 @@
       ctx.fillText('CALCULATEUR COLD CALL · LEADJIMÉ', 50, footerY);
       ctx.font = 'bold 15px Inter, Arial, sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText('Outil créé par Théo Savoy · leadjime.com →', 1150, footerY);
+      ctx.fillText('leadjime.com →', 1150, footerY);
       ctx.textAlign = 'left';
 
       // -- Layout
