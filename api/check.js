@@ -4,29 +4,35 @@ module.exports = async function handler(request, response) {
 
   const results = {};
 
-  // 1. Usage endpoint
+  // Test avec Bearer
   try {
-    const r1 = await fetch('https://www.bigshield.app/api/v1/usage', {
+    const r = await fetch('https://www.bigshield.app/api/v1/usage', {
       headers: { 'Authorization': 'Bearer ' + bigshieldKey }
     });
-    results.usage = { status: r1.status, body: (await r1.text()).substring(0, 500) };
-  } catch (e) { results.usage = { error: e.message }; }
+    results.bearer = { status: r.status, body: (await r.text()).substring(0, 500) };
+  } catch (e) { results.bearer = { error: e.message }; }
 
-  // 2. Validate with real email
+  // Test avec X-API-Key header (au cas où)
   try {
-    const r2 = await fetch('https://www.bigshield.app/api/v1/validate', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + bigshieldKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'test@gmail.com' })
+    const r = await fetch('https://www.bigshield.app/api/v1/usage', {
+      headers: { 'X-API-Key': bigshieldKey }
     });
-    results.validate = { status: r2.status, body: (await r2.text()).substring(0, 500) };
-  } catch (e) { results.validate = { error: e.message }; }
+    results.xapikey = { status: r.status, body: (await r.text()).substring(0, 500) };
+  } catch (e) { results.xapikey = { error: e.message }; }
 
-  // 3. Domain score (public, no auth)
+  // Test raw key as header value
   try {
-    const r3 = await fetch('https://www.bigshield.app/api/v1/domain-score?domain=gmail.com');
-    results.domainScore = { status: r3.status, body: (await r3.text()).substring(0, 300) };
-  } catch (e) { results.domainScore = { error: e.message }; }
+    const r = await fetch('https://www.bigshield.app/api/v1/usage', {
+      headers: { 'Authorization': bigshieldKey }
+    });
+    results.rawkey = { status: r.status, body: (await r.text()).substring(0, 500) };
+  } catch (e) { results.rawkey = { error: e.message }; }
+
+  results.keyInfo = {
+    length: bigshieldKey.length,
+    prefix: bigshieldKey.substring(0, 12),
+    fullKeyPreview: bigshieldKey.substring(0, 20) + '...'
+  };
 
   return response.status(200).json(results);
 };
