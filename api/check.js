@@ -1,11 +1,12 @@
 module.exports = async function handler(request, response) {
-  const auth = request.headers['authorization'] || '';
-  const expected = 'Bearer ' + (process.env.ADMIN_TOKEN || '');
-  if (!process.env.ADMIN_TOKEN || auth !== expected) {
-    return response.status(401).json({ error: 'Unauthorized' });
-  }
-
   const bigshieldKey = process.env.BIGSHIELD_API_KEY;
+
+  if (!bigshieldKey) {
+    return response.status(200).json({
+      error: 'BIGSHIELD_API_KEY not set in env',
+      keyLength: 0
+    });
+  }
 
   // Test direct BigShield
   try {
@@ -23,12 +24,18 @@ module.exports = async function handler(request, response) {
     clearTimeout(t);
     const body = await r.text();
     return response.status(200).json({
-      bigshieldStatus: r.status,
-      bigshieldBody: body,
+      status: r.status,
+      ok: r.ok,
+      body: body.substring(0, 1000),
       keyLength: bigshieldKey.length,
       keyPrefix: bigshieldKey.substring(0, 10)
     });
   } catch (e) {
-    return response.status(500).json({ error: e.message });
+    return response.status(200).json({
+      error: e.message,
+      errorName: e.name,
+      keyLength: bigshieldKey.length,
+      keyPrefix: bigshieldKey.substring(0, 10)
+    });
   }
 };
