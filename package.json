@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "description": "Leadjimé – Simulateur Objectif Cold Call",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "test": "node scratch/test_export.js"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3"
   }
 }

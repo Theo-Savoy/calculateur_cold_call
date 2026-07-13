@@ -4,3 +4,5 @@ scratch/
 screenshots/
 *.html.old
 Minari*.html
+.vercel
+.env*

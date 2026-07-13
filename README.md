@@ -10,10 +10,35 @@ Simulateur web pour estimer le temps de prospection téléphonique nécessaire p
 - Export PNG format LinkedIn (1200×630).
 - Partage LinkedIn avec copie de l'image et texte pré-rempli.
 - Interface responsive, design bento.
+- Collecte d'emails via Upstash Redis (`POST /api/subscribe`).
 
-## Démarrage
+## Démarrage local
 
-Ouvrir simplement `index.html` dans un navigateur moderne. Aucune dépendance externe.
+```bash
+npm install
+vercel dev
+```
+
+## Endpoints
+
+- `POST /api/subscribe` — body `{ "email": "user@example.com" }` — enregistre l'email dans Upstash Redis.
+- `GET /api/admin` — header `Authorization: Bearer <ADMIN_TOKEN>` — liste tous les emails collectés.
+
+## Variables d'environnement
+
+- `UPSTASH_REDIS_REST_URL` — URL REST Upstash.
+- `UPSTASH_REDIS_REST_TOKEN` — token REST Upstash.
+- `ADMIN_TOKEN` — token pour l'endpoint admin (récupération des emails).
+
+## Déploiement
+
+```bash
+npm install -g vercel
+vercel link
+vercel integration add upstash/upstash-kv
+vercel env add ADMIN_TOKEN
+vercel --prod
+```
 
 ## Auteur
 

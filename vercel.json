@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/$1" }
+  ],
+  "functions": {
+    "api/subscribe.js": {
+      "memory": 128,
+      "maxDuration": 10
+    },
+    "api/admin.js": {
+      "memory": 128,
+      "maxDuration": 10
+    }
+  }
+}

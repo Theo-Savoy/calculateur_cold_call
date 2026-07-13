@@ -3330,6 +3330,7 @@
       const emailInput = document.getElementById('gateEmail');
       const email = emailInput.value.trim();
       const errorEl = document.getElementById('gateError');
+      const btn = document.querySelector('.gate-btn');
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         errorEl.style.display = 'block';
@@ -3337,9 +3338,19 @@
         return;
       }
       errorEl.style.display = 'none';
-      // Store email
+      btn.disabled = true;
+      btn.textContent = 'Envoi...';
+
+      // Envoi au backend (meilleure erreure: fire-and-forget, l'utilisateur n'attend pas)
+      fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email }),
+        keepalive: true
+      }).catch(function () { /* silencieux */ });
+
+      // Store email + déverrouille immédiatement pour ne pas bloquer l'UX
       localStorage.setItem('leadjime_gate_email', email);
-      // Hide gate
       const gate = document.getElementById('emailGate');
       gate.style.opacity = '0';
       gate.style.transition = 'opacity 0.3s';
