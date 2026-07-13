@@ -6,11 +6,11 @@
   "functions": {
     "api/subscribe.js": {
       "memory": 128,
-      "maxDuration": 10
+      "maxDuration": 20
     },
     "api/admin.js": {
       "memory": 128,
-      "maxDuration": 10
+      "maxDuration": 20
     }
   }
 }

@@ -43,7 +43,7 @@ module.exports = async function handler(request, response) {
     if (bigshieldKey) {
       try {
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 800);
+        const t = setTimeout(() => ctrl.abort(), 6000);
         const verifyRes = await fetch('https://bigshield.app/api/v1/validate', {
           method: 'POST',
           headers: {
@@ -60,7 +60,9 @@ module.exports = async function handler(request, response) {
           bsScore = typeof v.risk_score === 'number' ? v.risk_score : 0;
           bsReason = v.recommendation || '';
         } else if (verifyRes.status === 401) {
-          // Cle BigShield pas activee ou invalide - on laisse passer
+          // Cle BigShield invalide - on bloque par securite
+          bsStatus = 'unchecked';
+        } else {
           bsStatus = 'unchecked';
         }
       } catch (e) {
@@ -68,11 +70,23 @@ module.exports = async function handler(request, response) {
       }
     }
 
-    // 3. Decision finale
+    // 3. Decision finale — si BigShield injoignable, on ne laisse PAS passer
+    if (bsStatus === 'unchecked' && bigshieldKey) {
+      return response.status(503).json({
+        valid: false,
+        error: 'Service de validation temporairement indisponible. Reessayez dans un instant.'
+      });
+    }
     if (bsStatus === 'reject') {
       return response.status(400).json({
         valid: false,
         error: 'Cette adresse email n\'est pas valide. Utilisez une adresse reelle.'
+      });
+    }
+    if (bsStatus === 'require_verification') {
+      return response.status(400).json({
+        valid: false,
+        error: 'Cette adresse email necessite une verification. Utilisez une autre adresse.'
       });
     }
     if (bsStatus === 'review' && bsScore < 30) {
