@@ -9,7 +9,7 @@ module.exports = async function handler(request, response) {
   }
 
   const email = (body.email || '').trim().toLowerCase();
-  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRe = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
   if (!emailRe.test(email)) {
     return response.status(400).json({ valid: false, error: 'Adresse email invalide.' });
   }
@@ -17,7 +17,7 @@ module.exports = async function handler(request, response) {
   const token = process.env.AIRTABLE_TOKEN;
   const baseId = process.env.AIRTABLE_BASE_ID;
   const tableId = process.env.AIRTABLE_TABLE_ID;
-  const bigshieldKey = process.env.BIGSHIELD_API_KEY;
+  const abstractKey = process.env.ABSTRACT_API_KEY;
 
   if (!token || !baseId || !tableId) {
     return response.status(500).json({ valid: false, error: 'Airtable non configure' });
@@ -35,80 +35,21 @@ module.exports = async function handler(request, response) {
       }
     }
 
-    // 2. Validation BigShield si cle presente et valide
-    let bsStatus = 'unknown';
-    let bsScore = 0;
-    let bsReason = '';
+    // 2. Verification email
+    const verdict = await verifyEmail(email, abstractKey);
 
-    if (bigshieldKey) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 6000);
-        const verifyRes = await fetch('https://www.bigshield.app/api/v1/validate', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + bigshieldKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ email, wait: false }),
-          signal: ctrl.signal
-        });
-        clearTimeout(t);
-        if (verifyRes.ok) {
-          const v = await verifyRes.json();
-          bsStatus = v.recommendation || (v.valid ? 'accept' : 'reject');
-          bsScore = typeof v.risk_score === 'number' ? v.risk_score : 0;
-          bsReason = v.recommendation || '';
-        } else if (verifyRes.status === 401) {
-          // Cle BigShield invalide - on bloque par securite
-          bsStatus = 'unchecked';
-        } else {
-          bsStatus = 'unchecked';
-        }
-      } catch (e) {
-        bsStatus = 'unchecked';
-      }
+    if (!verdict.pass) {
+      return response.status(400).json({ valid: false, error: verdict.error });
     }
 
-    // 3. Decision finale — si BigShield injoignable, on ne laisse PAS passer
-    if (bsStatus === 'unchecked' && bigshieldKey) {
-      return response.status(503).json({
-        valid: false,
-        error: 'Service de validation temporairement indisponible. Reessayez dans un instant.'
-      });
-    }
-    if (bsStatus === 'reject') {
-      return response.status(400).json({
-        valid: false,
-        error: 'Cette adresse email n\'est pas valide. Utilisez une adresse reelle.'
-      });
-    }
-    if (bsStatus === 'require_verification') {
-      return response.status(400).json({
-        valid: false,
-        error: 'Cette adresse email necessite une verification. Utilisez une autre adresse.'
-      });
-    }
-    if (bsStatus === 'review' && bsScore < 30) {
-      return response.status(400).json({
-        valid: false,
-        error: 'Adresse email a risque. Verifiez la saisie.'
-      });
-    }
-
-    // 4. Stockage Airtable
+    // 3. Stockage Airtable
     const fields = {
       'Email': email,
       'Timestamp': new Date().toISOString(),
       'UserAgent': request.headers['user-agent'] || '',
-      'Referer': request.headers['referer'] || ''
+      'Referer': request.headers['referer'] || '',
+      'EmailStatus': verdict.status
     };
-
-    // EmailStatus selon verdict
-    if (bsStatus === 'accept') fields.EmailStatus = 'deliverable';
-    else if (bsStatus === 'review') fields.EmailStatus = 'risky';
-    else if (bsStatus === 'reject') fields.EmailStatus = 'undeliverable';
-    else fields.EmailStatus = 'unchecked';
 
     const createUrl = `https://api.airtable.com/v0/${baseId}/${tableId}`;
     const createRes = await fetch(createUrl, {
@@ -125,8 +66,65 @@ module.exports = async function handler(request, response) {
       return response.status(500).json({ valid: false, error: 'Storage error', detail: errText });
     }
 
-    return response.status(200).json({ valid: true, status: bsStatus });
+    return response.status(200).json({ valid: true, status: verdict.status, source: verdict.source });
   } catch (err) {
     return response.status(500).json({ valid: false, error: 'Server error', detail: err.message });
   }
 };
+
+async function verifyEmail(email, abstractKey) {
+  // Couche 1: disposable (debounce, gratuit, ~126ms, sans clé)
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const r = await fetch('https://disposable.debounce.io/?email=' + encodeURIComponent(email), { signal: ctrl.signal });
+    clearTimeout(t);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.disposable === true) {
+        return { pass: false, status: 'undeliverable', error: 'Adresse email temporaire non autorisee.' };
+      }
+    }
+  } catch (e) { /* on continue */ }
+
+  // Couche 2: MX du domaine (DNS-over-HTTPS Google, gratuit, ~60ms, sans clé)
+  const domain = email.split('@')[1];
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const r = await fetch('https://dns.google/resolve?name=' + encodeURIComponent(domain) + '&type=MX', { signal: ctrl.signal });
+    clearTimeout(t);
+    if (r.ok) {
+      const d = await r.json();
+      const hasMx = d.Answer && d.Answer.some(a => a.type === 15);
+      if (!hasMx) {
+        return { pass: false, status: 'undeliverable', error: 'Domaine email sans serveur de messagerie.' };
+      }
+    }
+  } catch (e) { /* on continue */ }
+
+  // Couche 3: AbstractAPI si clé présente (SMTP complet, <300ms, 100/mois gratuit)
+  if (abstractKey) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch('https://emailvalidation.abstractapi.com/v1/?api_key=' + abstractKey + '&email=' + encodeURIComponent(email), { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) {
+        const v = await r.json();
+        const deliverability = (v.deliverability || '').toLowerCase();
+        if (deliverability === 'deliverable') {
+          return { pass: true, status: 'deliverable', source: 'abstract' };
+        }
+        if (deliverability === 'undeliverable') {
+          return { pass: false, status: 'undeliverable', error: 'Cette adresse email n\'existe pas.' };
+        }
+        // risky / unknown -> on laisse passer avec flag
+        return { pass: true, status: 'risky', source: 'abstract' };
+      }
+    } catch (e) { /* fallback: on laisse passer */ }
+  }
+
+  // Si on arrive ici: format OK + pas disposable + MX OK = on accepte
+  return { pass: true, status: 'unchecked', source: 'free' };
+}
