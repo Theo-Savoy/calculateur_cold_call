@@ -1,42 +1,32 @@
 module.exports = async function handler(request, response) {
   const bigshieldKey = process.env.BIGSHIELD_API_KEY;
+  if (!bigshieldKey) return response.status(200).json({ error: 'no key' });
 
-  if (!bigshieldKey) {
-    return response.status(200).json({ error: 'BIGSHIELD_API_KEY not set' });
-  }
+  const results = {};
 
+  // 1. Usage endpoint
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch('https://www.bigshield.app/api/v1/validate', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + bigshieldKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email: 'test@gmail.com', wait: true }),
-      signal: ctrl.signal
+    const r1 = await fetch('https://www.bigshield.app/api/v1/usage', {
+      headers: { 'Authorization': 'Bearer ' + bigshieldKey }
     });
-    clearTimeout(t);
-    const body = await r.text();
+    results.usage = { status: r1.status, body: (await r1.text()).substring(0, 500) };
+  } catch (e) { results.usage = { error: e.message }; }
 
-    return response.status(200).json({
-      status: r.status,
-      ok: r.ok,
-      body: body.substring(0, 2000),
-      headers: Object.fromEntries(r.headers.entries()),
-      keyLength: bigshieldKey.length,
-      keyPrefix: bigshieldKey.substring(0, 12),
-      keySuffix: bigshieldKey.substring(bigshieldKey.length - 4),
-      keyHasNewline: bigshieldKey.includes('\n'),
-      keyHasSpace: bigshieldKey.includes(' '),
-      keyTrimmedLength: bigshieldKey.trim().length
+  // 2. Validate with real email
+  try {
+    const r2 = await fetch('https://www.bigshield.app/api/v1/validate', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + bigshieldKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'test@gmail.com' })
     });
-  } catch (e) {
-    return response.status(200).json({
-      error: e.message,
-      errorName: e.name,
-      keyLength: bigshieldKey.length
-    });
-  }
+    results.validate = { status: r2.status, body: (await r2.text()).substring(0, 500) };
+  } catch (e) { results.validate = { error: e.message }; }
+
+  // 3. Domain score (public, no auth)
+  try {
+    const r3 = await fetch('https://www.bigshield.app/api/v1/domain-score?domain=gmail.com');
+    results.domainScore = { status: r3.status, body: (await r3.text()).substring(0, 300) };
+  } catch (e) { results.domainScore = { error: e.message }; }
+
+  return response.status(200).json(results);
 };
