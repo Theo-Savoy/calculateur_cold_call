@@ -1,16 +1,3 @@
-const { Redis } = require('@upstash/redis');
-
-let redis = null;
-function getRedis() {
-  if (!redis) {
-    redis = new Redis({
-      url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-  return redis;
-}
-
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
@@ -27,24 +14,55 @@ module.exports = async function handler(request, response) {
     return response.status(400).json({ error: 'Email invalide' });
   }
 
+  const token = process.env.AIRTABLE_TOKEN;
+  const baseId = process.env.AIRTABLE_BASE_ID;
+  const tableId = process.env.AIRTABLE_TABLE_ID;
+
+  if (!token || !baseId || !tableId) {
+    return response.status(500).json({ error: 'Airtable non configure' });
+  }
+
   try {
-    const r = getRedis();
-    const exists = await r.get(`email:${email}`);
-    if (exists) {
-      return response.status(200).json({ ok: true, duplicate: true });
+    // Verifier si l'email existe deja (dedup)
+    const searchUrl = `https://api.airtable.com/v0/${baseId}/${tableId}?filterByFormula=LOWER({Email})='${email}'&maxRecords=1`;
+    const searchRes = await fetch(searchUrl, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.records && searchData.records.length > 0) {
+        return response.status(200).json({ ok: true, duplicate: true });
+      }
     }
 
-    const entry = {
-      email,
-      ts: new Date().toISOString(),
-      ua: request.headers['user-agent'] || '',
-      ref: request.headers['referer'] || '',
-    };
-    await r.set(`email:${email}`, entry);
-    await r.lpush('emails:list', email);
+    // Creer le record
+    const createUrl = `https://api.airtable.com/v0/${baseId}/${tableId}`;
+    const createRes = await fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        records: [{
+          fields: {
+            'Email': email,
+            'Timestamp': new Date().toISOString(),
+            'UserAgent': request.headers['user-agent'] || '',
+            'Referer': request.headers['referer'] || ''
+          }
+        }]
+      })
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      return response.status(500).json({ error: 'Airtable error', detail: errText });
+    }
 
     return response.status(200).json({ ok: true });
   } catch (err) {
-    return response.status(500).json({ error: 'Storage error: ' + (err.message || 'unknown') });
+    return response.status(500).json({ error: 'Server error', detail: err.message });
   }
 };

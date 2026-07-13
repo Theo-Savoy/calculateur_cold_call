@@ -10,35 +10,34 @@ Simulateur web pour estimer le temps de prospection téléphonique nécessaire p
 - Export PNG format LinkedIn (1200×630).
 - Partage LinkedIn avec copie de l'image et texte pré-rempli.
 - Interface responsive, design bento.
-- Collecte d'emails via Upstash Redis (`POST /api/subscribe`).
+- Collecte d'emails via Airtable (`POST /api/subscribe`).
 
 ## Démarrage local
 
 ```bash
-npm install
 vercel dev
 ```
 
 ## Endpoints
 
-- `POST /api/subscribe` — body `{ "email": "user@example.com" }` — enregistre l'email dans Upstash Redis.
-- `GET /api/admin` — header `Authorization: Bearer <ADMIN_TOKEN>` — liste tous les emails collectés.
+- `POST /api/subscribe` — body `{ "email": "user@example.com" }` — enregistre dans Airtable (déduplication par email).
+- `GET /api/admin` — header `Authorization: Bearer <ADMIN_TOKEN>` — liste tous les emails.
 
-## Variables d'environnement
+## Variables d'environnement (Vercel)
 
-- `UPSTASH_REDIS_REST_URL` — URL REST Upstash.
-- `UPSTASH_REDIS_REST_TOKEN` — token REST Upstash.
-- `ADMIN_TOKEN` — token pour l'endpoint admin (récupération des emails).
+- `AIRTABLE_TOKEN` — Personal Access Token Airtable.
+- `AIRTABLE_BASE_ID` — ID de la base (commence par `app...`).
+- `AIRTABLE_TABLE_ID` — ID de la table (commence par `tbl...`).
+- `ADMIN_TOKEN` — token pour l'endpoint admin.
 
-## Déploiement
+## Table Airtable attendue
 
-```bash
-npm install -g vercel
-vercel link
-vercel integration add upstash/upstash-kv
-vercel env add ADMIN_TOKEN
-vercel --prod
-```
+| Champ      | Type     |
+| ---------- | -------- |
+| Email      | Email    |
+| Timestamp  | Date     |
+| UserAgent  | Text     |
+| Referer    | Text     |
 
 ## Auteur
 

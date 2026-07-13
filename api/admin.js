@@ -1,16 +1,3 @@
-const { Redis } = require('@upstash/redis');
-
-let redis = null;
-function getRedis() {
-  if (!redis) {
-    redis = new Redis({
-      url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-  return redis;
-}
-
 module.exports = async function handler(request, response) {
   if (request.method !== 'GET') {
     return response.status(405).json({ error: 'Method not allowed' });
@@ -22,18 +9,46 @@ module.exports = async function handler(request, response) {
     return response.status(401).json({ error: 'Unauthorized' });
   }
 
-  try {
-    const r = getRedis();
-    const emails = await r.lrange('emails:list', 0, -1);
-    const entries = await Promise.all(
-      emails.map(async (email) => {
-        const data = await r.get(`email:${email}`);
-        return data;
-      })
-    );
+  const token = process.env.AIRTABLE_TOKEN;
+  const baseId = process.env.AIRTABLE_BASE_ID;
+  const tableId = process.env.AIRTABLE_TABLE_ID;
 
-    return response.status(200).json({ count: entries.length, entries });
+  if (!token || !baseId || !tableId) {
+    return response.status(500).json({ error: 'Airtable non configure' });
+  }
+
+  try {
+    const records = [];
+    let offset = null;
+
+    do {
+      let url = `https://api.airtable.com/v0/${baseId}/${tableId}?pageSize=100&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=desc`;
+      if (offset) url += `&offset=${encodeURIComponent(offset)}`;
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return response.status(500).json({ error: 'Airtable error', detail: errText });
+      }
+
+      const data = await res.json();
+      if (data.records) {
+        records.push(...data.records.map(r => ({
+          id: r.id,
+          email: r.fields.Email,
+          timestamp: r.fields.Timestamp,
+          userAgent: r.fields.UserAgent,
+          referer: r.fields.Referer
+        })));
+      }
+      offset = data.offset || null;
+    } while (offset);
+
+    return response.status(200).json({ count: records.length, entries: records });
   } catch (err) {
-    return response.status(500).json({ error: 'Storage error' });
+    return response.status(500).json({ error: 'Server error', detail: err.message });
   }
 };
