@@ -9,8 +9,10 @@ module.exports = async function handler(request, response) {
   }
 
   const email = (body.email || '').trim().toLowerCase();
-  const emailRe = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-  if (!emailRe.test(email)) {
+  const at = email.indexOf('@');
+  const dot = email.lastIndexOf('.');
+  const emailOk = at > 0 && dot > at + 1 && dot < email.length - 1;
+  if (!emailOk) {
     return response.status(400).json({ valid: false, error: 'Adresse email invalide.' });
   }
 
@@ -24,7 +26,6 @@ module.exports = async function handler(request, response) {
   }
 
   try {
-    // 1. Deduplication Airtable
     const searchUrl = `https://api.airtable.com/v0/${baseId}/${tableId}?filterByFormula=LOWER({Email})='${email}'&maxRecords=1`;
     const searchRes = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${token}` } });
 
@@ -35,14 +36,12 @@ module.exports = async function handler(request, response) {
       }
     }
 
-    // 2. Verification email
     const verdict = await verifyEmail(email, abstractKey);
 
     if (!verdict.pass) {
       return response.status(400).json({ valid: false, error: verdict.error });
     }
 
-    // 3. Stockage Airtable
     const fields = {
       'Email': email,
       'Timestamp': new Date().toISOString(),
@@ -73,7 +72,7 @@ module.exports = async function handler(request, response) {
 };
 
 async function verifyEmail(email, abstractKey) {
-  // Couche 1: disposable (debounce, gratuit, ~126ms, sans clé)
+  // Couche 1: disposable (debounce, gratuit, ~126ms)
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 3000);
@@ -85,9 +84,9 @@ async function verifyEmail(email, abstractKey) {
         return { pass: false, status: 'undeliverable', error: 'Adresse email temporaire non autorisee.' };
       }
     }
-  } catch (e) { /* on continue */ }
+  } catch (e) { }
 
-  // Couche 2: MX du domaine (DNS-over-HTTPS Google, gratuit, ~60ms, sans clé)
+  // Couche 2: MX du domaine (DNS-over-HTTPS Google, gratuit, ~60ms)
   const domain = email.split('@')[1];
   try {
     const ctrl = new AbortController();
@@ -101,30 +100,29 @@ async function verifyEmail(email, abstractKey) {
         return { pass: false, status: 'undeliverable', error: 'Domaine email sans serveur de messagerie.' };
       }
     }
-  } catch (e) { /* on continue */ }
+  } catch (e) { }
 
-  // Couche 3: AbstractAPI si clé présente (SMTP complet, <300ms, 100/mois gratuit)
+  // Couche 3: AbstractAPI Email Reputation (SMTP complet) si clé présente
   if (abstractKey) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 5000);
-      const r = await fetch('https://emailvalidation.abstractapi.com/v1/?api_key=' + abstractKey + '&email=' + encodeURIComponent(email), { signal: ctrl.signal });
+      const r = await fetch('https://emailreputation.abstractapi.com/v1/?api_key=' + abstractKey + '&email=' + encodeURIComponent(email), { signal: ctrl.signal });
       clearTimeout(t);
       if (r.ok) {
         const v = await r.json();
-        const deliverability = (v.deliverability || '').toLowerCase();
-        if (deliverability === 'deliverable') {
+        const status = (v.email_deliverability && v.email_deliverability.status || '').toLowerCase();
+        if (status === 'deliverable') {
           return { pass: true, status: 'deliverable', source: 'abstract' };
         }
-        if (deliverability === 'undeliverable') {
+        if (status === 'undeliverable') {
           return { pass: false, status: 'undeliverable', error: 'Cette adresse email n\'existe pas.' };
         }
-        // risky / unknown -> on laisse passer avec flag
+        // unknown -> on laisse passer avec flag
         return { pass: true, status: 'risky', source: 'abstract' };
       }
-    } catch (e) { /* fallback: on laisse passer */ }
+    } catch (e) { }
   }
 
-  // Si on arrive ici: format OK + pas disposable + MX OK = on accepte
   return { pass: true, status: 'unchecked', source: 'free' };
 }
