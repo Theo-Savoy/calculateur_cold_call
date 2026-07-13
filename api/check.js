@@ -12,7 +12,7 @@ module.exports = async function handler(request, response) {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch('https://bigshield.app/api/v1/validate', {
+    const r = await fetch('https://www.bigshield.app/api/v1/validate', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + bigshieldKey,
